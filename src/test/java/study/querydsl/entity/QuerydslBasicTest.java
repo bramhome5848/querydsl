@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.persistence.EntityManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static study.querydsl.entity.QMember.member;
 
 @SpringBootTest
 @Transactional
@@ -66,11 +67,14 @@ public class QuerydslBasicTest {
 
         //member1 찾기
         //when
-        QMember m = new QMember("m");
+        //QMember m = new QMember("m");    //별칭 직접 지정 (엔티티의 별칭) -> 같은 테이블을 조인할 경우 각각 다른 alias 필요
+        //QMember m = QMember.member;      //기본 인스턴스 사용 (엔티티의 별칭)
+
+        //실제 querydsl은 jpql로 변형되서 실행됨
         Member findMember = queryFactory
-                .select(m)
-                .from(m)
-                .where(m.username.eq("member1"))    //파라미터 바인딩
+                .select(member)
+                .from(member)
+                .where(member.username.eq("member1"))    //파라미터 바인딩
                 .fetchOne();
 
         //then
