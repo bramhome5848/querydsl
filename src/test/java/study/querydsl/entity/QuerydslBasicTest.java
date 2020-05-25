@@ -279,4 +279,102 @@ public class QuerydslBasicTest {
         assertThat(teamB.get(team.name)).isEqualTo("teamB");
         assertThat(teamB.get(member.age.avg())).isEqualTo(35);
     }
+
+    /**
+     * 팀A에 소속된 모든 회원
+     */
+    @Test
+    public void join() {
+
+        //when
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .join(member.team, team)   //team -> QTeam의 alias
+                .where(team.name.eq("teamA"))
+                .fetch();
+
+        //then
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("member1", "member2");
+    }
+
+    /**
+     * 세타 조인(연관관계가 없는 필드로 조인)
+     * 회원의 이름이 팀 이름과 같은 회원 조회
+     * from 절에 여러 엔티티를 선택해서 세타 조인
+     * 외부조인불가능 다음에 설명할 조인 on을 사용하면 외부조인 가능
+     */
+    @Test
+    public void theta_join() {
+
+        //given
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+        em.persist(new Member("teamC"));
+
+        //when
+        List<Member> result = queryFactory
+                .select(member)
+                .from(member, team)
+                .where(member.username.eq(team.name))
+                .fetch();
+
+        //then
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("teamA", "teamB");
+
+    }
+
+    /**
+     * 조인대상필터링
+     * 연관 관계가 없는 엔티티 외부조인
+     * 예) 회원과 팀을 조인하면서, 팀 이름이 teamA인 팀만 조인, 회원은 모두 조회
+     * JPQL: SELECT m, t FROM Member m LEFT JOIN m.team t on t.name = 'teamA'
+     * SQL: SELECT m.*, t.* FROM Member m LEFT JOIN Team t ON m.TEAM_ID = t.id and t.name='teamA'
+     */
+    @Test
+    public void join_on_filtering() throws Exception {
+
+        //when
+        List<Tuple> result = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(member.team, team).on(team.name.eq("teamA"))
+                .fetch();
+
+        //then
+        for (Tuple tuple : result) {
+            System.out.println("tuple = " + tuple);
+        }
+    }
+
+    /**
+     * 2. 연관관계 없는 엔티티 외부 조인
+     * 예)회원의 이름과 팀의 이름이 같은 대상 외부 조인
+     * JPQL: SELECT m, t FROM Member m LEFT JOIN Team t on m.username = t.name
+     * SQL: SELECT m.*, t.* FROM Member m LEFT JOIN Team t ON m.username = t.name
+     * 일반조인 : leftJoin(member.team, team) -> pk,fk 이용한 조인
+     * on조인 : from(member).leftJoin(team).on(xxx)
+     */
+    @Test
+    public void join_on_no_relation() throws Exception {
+
+        //given+
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+
+        //when
+        List<Tuple> result = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(team).on(member.username.eq(team.name))
+                .fetch();
+
+        //then
+        for (Tuple tuple : result) {
+            System.out.println("t=" + tuple);
+        }
+    }
 }
