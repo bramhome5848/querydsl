@@ -739,6 +739,10 @@ public class QuerydslBasicTest {
      * Dynamic query
      * BooleanBuilder
      * Where 다중 파라미터 사용
+     *
+     * where 조건에 null 값은 무시됨
+     * 메서드를 다른 쿼리에서도 재활용 가능
+     * 쿼리 자체의 가독성이 높아짐
      */
     @Test
     public void dynamicQuery_BooleanBuilder() throws Exception {
@@ -793,8 +797,12 @@ public class QuerydslBasicTest {
     private BooleanExpression usernameEq(String usernameCond) {
         return usernameCond != null ? member.username.eq(usernameCond) : null;
     }
+
     private BooleanExpression ageEq(Integer ageCond) {
         return ageCond != null ? member.age.eq(ageCond) : null;
     }
 
+    private  BooleanExpression allEq(String usernameCond, Integer ageCond) {
+        return usernameEq(usernameCond).and(ageEq(ageCond));
+    }
 }
