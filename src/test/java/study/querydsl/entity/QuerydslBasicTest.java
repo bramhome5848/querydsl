@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.Commit;
 import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.dto.MemberDto;
 import study.querydsl.dto.QMemberDto;
@@ -792,6 +793,7 @@ public class QuerydslBasicTest {
         return queryFactory
                 .selectFrom(member)
                 .where(usernameEq(usernameCond), ageEq(ageCond))
+                //.where(allEq(usernameCond, ageCond))
                 .fetch();
     }
     private BooleanExpression usernameEq(String usernameCond) {
@@ -803,6 +805,120 @@ public class QuerydslBasicTest {
     }
 
     private  BooleanExpression allEq(String usernameCond, Integer ageCond) {
+        //가장 앞이 null인 경우 NullPointerException 주의
         return usernameEq(usernameCond).and(ageEq(ageCond));
+    }
+
+    /**
+     * 수정, 삭제 벌크 연산
+     * 쿼리 한번으로 대량 데이터 수정
+     * JPQL 배치와 마찬가지로, 영속성 컨텍스트에 있는 엔티티를 무시하고 실행되기 때문에
+     * 배치 쿼리를 실행하고 나면 영속성 컨텍스트를 초기화 하는 것이 안전함
+     */
+
+    /** 참고
+     * -em.find() 메소드는 엔티티를 영속성 컨텍스트에서 먼저 찾고 없으면 데이터베이스에서 찾는다.
+     * 따라서 해당 엔티티가 메모리에 존재한다면(이미 이전에 동일한 엔티티를 조회한 적이 있기때문) 성능상 이점이 있다.
+     * JPQL은 항상 디비에서 찾는다. 왜냐하면 JPQL은 SQL로 변환되어 데이터베이스에 바로 날려보기 때문이다.
+     * 항상 디비에서 찾지만 디비에서 찾은 엔티티가 영속성 컨텍스트에 존재한다면 디비에서 찾은 엔티티를 버리고
+     * 영속성 컨텍스트에 있는 것을 반환값으로 넘긴다. -> 영속성 컨텍스트와 관계없이 쿼리가 실행된다..
+     * 실행전 기존 영속성에 대한 flush가 먼저 수행됨, em.clear는 수행되는 것이 아님
+     */
+    @Test
+    public void bulkUpdate() {
+
+        //member1 = 10 -> DB member1
+        //member2 = 20 -> DB member2
+        //member3 = 30 -> DB member3
+        //member4 = 40 -> DB member4
+
+        //when
+        //영향을 받은 데이터수
+        long count = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(28))
+                .execute();
+
+        //따라서 초기화가 반드시 필요
+        em.flush();
+        em.clear();
+
+        //member1 = 10 -> DB 비회원
+        //member2 = 20 -> DB 비회원
+        //member3 = 30 -> DB member3
+        //member4 = 40 -> DB member4
+
+        //db에 쿼리는 나가지만 영속성 컨텍스트에
+        //같은 id의 정보들이 있기 때문에 영속성 컨텍스트의 정보들을
+        //우선으로 가져오게 되어 DB와 영속성 컨텍스트 사이의 데이터 불일치가 발생
+
+        //then
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .fetch();
+
+        for (Member member1 : result) {
+            System.out.println("member1 = " + member1);
+        }
+
+    }
+
+    @Test
+    public void bulkAdd() {
+
+        //when
+        long count = queryFactory
+                .update(member)
+                //.set(member.age, member.age.add(1))
+                .set(member.age, member.age.multiply(2))
+                .execute();
+    }
+
+    @Test
+    public void bulkDelete() {
+
+        //when
+        long count = queryFactory
+                .delete(member)
+                .where(member.age.gt(18))
+                .execute();
+    }
+
+    /**
+     * SQL function 호출하기
+     * SQL function은 JPA와 같이 Dialect에 등록된 내용만 호출할 수 있다.
+     */
+    @Test
+    public void sqlFunction() {
+        //when
+        List<String> result = queryFactory
+                .select(
+                        Expressions.stringTemplate("function('replace', {0}, {1}, {2})",
+                                member.username, "member", "M"))    //member.username에서 member라는 단어를 M으로 변경
+                .from(member)
+                .fetch();
+
+        //then
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    public void sqlFunction2() {
+        //when
+        List<String> result = queryFactory
+                .select(member.username)
+                .from(member)
+//                .where(member.username.eq(
+//                        Expressions.stringTemplate("function('lower', {0})", member.username)))
+                .where(member.username.eq(member.username.lower()))
+                .fetch();
+
+        //then
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
     }
 }
